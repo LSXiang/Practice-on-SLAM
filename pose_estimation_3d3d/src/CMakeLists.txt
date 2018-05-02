@@ -1,0 +1,28 @@
+# set property
+set(CMAKE_CXX_FLAGS "-std=c++11")
+set(CMAKE_BUILD_TYPE "Debug")
+
+# add cmake modules 
+list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_modules)
+
+# OpenCV
+find_package(OpenCV REQUIRED)
+# g2o
+find_package(G2O REQUIRED)
+# csparse
+find_package(CSparse REQUIRED)
+
+# include
+include_directories(${OpenCV_INCLUDE_DIRS} ${G2O_INCLUDE_DIR} ${CSPARSE_INCLUDE_DIR} "/usr/include/eigen3/")
+
+# set ignore "deprecated-declarations" warning
+add_compile_options("-Wno-deprecated-declarations")
+
+# App 
+add_executable(pose_estimation_3d3d pose_estimation_3d3d.cpp)
+target_link_libraries( pose_estimation_3d3d 
+    ${OpenCV_LIBRARIES} 
+    ${G2O_STUFF_LIBRARY} ${G2O_CORE_LIBRARY} ${G2O_TYPES_SBA} ${G2O_SOLVER_CSPARSE_EXTENSION}
+    ${CSPARSE_LIBRARY}
+)
+

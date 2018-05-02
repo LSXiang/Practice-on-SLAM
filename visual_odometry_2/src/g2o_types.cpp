@@ -1,0 +1,125 @@
+/**
+ * @file    g2o_types.cpp
+ * @version v1.0.0
+ * @date    Dec,20 2017
+ * @author  jacob.lin
+ */
+
+#include "g2o_types.h"
+
+namespace visual_odometry
+{
+
+void EdgeProjectXYZRGBD::computeError(void)
+{
+    const g2o::VertexSBAPointXYZ* point = static_cast<const g2o::VertexSBAPointXYZ*>(_vertices[0]);
+    const g2o::VertexSE3Expmap* pose = static_cast<const g2o::VertexSE3Expmap*>(_vertices[1]);
+    _error = _measurement - pose->estimate().map(point->estimate());
+}
+
+void EdgeProjectXYZRGBD::linearizeOplus(void)
+{
+    g2o::VertexSE3Expmap* pose = pose = static_cast<g2o::VertexSE3Expmap*>(_vertices[1]);
+    g2o::SE3Quat T(pose->estimate());
+    g2o::VertexSBAPointXYZ* point = static_cast<g2o::VertexSBAPointXYZ*>(_vertices[0]);
+    Eigen::Vector3d xyz = point->estimate();
+    Eigen::Vector3d xyz_trans = T.map(xyz);
+    double x = xyz_trans[0];
+    double y = xyz_trans[1];
+    double z = xyz_trans[2];
+    
+    _jacobianOplusXi = - T.rotation().toRotationMatrix();
+    
+    _jacobianOplusXj(0, 0) = 0;
+    _jacobianOplusXj(0, 1) = -z;
+    _jacobianOplusXj(0, 2) = y;
+    _jacobianOplusXj(0, 3) = -1;
+    _jacobianOplusXj(0, 4) = 0;
+    _jacobianOplusXj(0, 5) = 0;
+    
+    _jacobianOplusXj(1, 0) = z;
+    _jacobianOplusXj(1, 1) = 0;
+    _jacobianOplusXj(1, 2) = -x;
+    _jacobianOplusXj(1, 3) = 0;
+    _jacobianOplusXj(1, 4) = -1;
+    _jacobianOplusXj(1, 5) = 0;
+    
+    _jacobianOplusXj(2, 0) = -y;
+    _jacobianOplusXj(2, 1) = x;
+    _jacobianOplusXj(2, 2) = 0;
+    _jacobianOplusXj(2, 3) = 0;
+    _jacobianOplusXj(2, 4) = 0;
+    _jacobianOplusXj(2, 5) = -1;
+}
+
+void EdgeProjectXYZRGBDPoseOnly::computeError(void)
+{
+    const g2o::VertexSE3Expmap* pose = static_cast<const g2o::VertexSE3Expmap*>(_vertices[0]);
+    _error = _measurement - pose->estimate().map(_point);
+}
+
+void EdgeProjectXYZRGBDPoseOnly::linearizeOplus()
+{
+    g2o::VertexSE3Expmap* pose = static_cast<g2o::VertexSE3Expmap*>(_vertices[0]);
+    g2o::SE3Quat T(pose->estimate());
+    Eigen::Vector3d xyz_trans = T.map(_point);
+    double x = xyz_trans[0];
+    double y = xyz_trans[1];
+    double z = xyz_trans[2];
+    
+    _jacobianOplusXi(0, 0) = 0;
+    _jacobianOplusXi(0, 1) = -z;
+    _jacobianOplusXi(0, 2) = y;
+    _jacobianOplusXi(0, 3) = -1;
+    _jacobianOplusXi(0, 4) = 0;
+    _jacobianOplusXi(0, 5) = 0;
+    
+    _jacobianOplusXi(1, 0) = z;
+    _jacobianOplusXi(1, 1) = 0;
+    _jacobianOplusXi(1, 2) = -x;
+    _jacobianOplusXi(1, 3) = 0;
+    _jacobianOplusXi(1, 4) = -1;
+    _jacobianOplusXi(1, 5) = 0;
+    
+    _jacobianOplusXi(2, 0) = -y;
+    _jacobianOplusXi(2, 1) = x;
+    _jacobianOplusXi(2, 2) = 0;
+    _jacobianOplusXi(2, 3) = 0;
+    _jacobianOplusXi(2, 4) = 0;
+    _jacobianOplusXi(2, 5) = -1;
+}
+
+void EdgeProjectXYZ2UVPoseOnly::computeError(void)
+{
+    const g2o::VertexSE3Expmap* pose = static_cast<const g2o::VertexSE3Expmap*>(_vertices[0]);
+    _error = _measurement - _camera->camera2pixel(pose->estimate().map(_point));
+}
+
+void EdgeProjectXYZ2UVPoseOnly::linearizeOplus(void)
+{
+    const g2o::VertexSE3Expmap* pose = static_cast<g2o::VertexSE3Expmap*>(_vertices[0]);
+    g2o::SE3Quat T(pose->estimate());
+    Eigen::Vector3d xyz_trans = T.map(_point);
+    double x = xyz_trans[0];
+    double y = xyz_trans[1];
+    double z = xyz_trans[2];
+    double z_2 = z * z;
+    
+    _jacobianOplusXi ( 0,0 ) = x * y / z_2 * _camera->fx_;
+    _jacobianOplusXi ( 0,1 ) = -(1 + (x * x / z_2)) * _camera->fx_;
+    _jacobianOplusXi ( 0,2 ) = y / z * _camera->fx_;
+    _jacobianOplusXi ( 0,3 ) = -1.f /z * _camera->fx_;
+    _jacobianOplusXi ( 0,4 ) = 0;
+    _jacobianOplusXi ( 0,5 ) = x / z_2 * _camera->fx_;
+
+    _jacobianOplusXi ( 1,0 ) = (1 + y * y / z_2 ) * _camera->fy_;
+    _jacobianOplusXi ( 1,1 ) = -x * y / z_2 * _camera->fy_;
+    _jacobianOplusXi ( 1,2 ) = -x / z * _camera->fy_;
+    _jacobianOplusXi ( 1,3 ) = 0;
+    _jacobianOplusXi ( 1,4 ) = -1.f / z * _camera->fy_;
+    _jacobianOplusXi ( 1,5 ) = y / z_2 * _camera->fy_;
+}
+
+}
+
+

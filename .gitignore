@@ -30,3 +30,12 @@
 *.exe
 *.out
 *.app
+
+# build & kdevelop
+*/build
+*/.kdev4
+*/*.kdev4
+
+*.tar
+*.tar.gz
+*.tgz
