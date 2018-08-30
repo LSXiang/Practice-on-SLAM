@@ -6,7 +6,7 @@ set(CMAKE_BUILD_TYPE "Debug")
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_modules)
 
 # OpenCV
-find_package(OpenCV REQUIRED)
+find_package(OpenCV 3.4 REQUIRED)
 
 # G2O
 find_package(G2O REQUIRED)
@@ -22,3 +22,6 @@ add_compile_options("-Wno-deprecated-declarations")
 # APP 
 add_executable(direct_sparse direct_sparse.cpp)
 target_link_libraries(direct_sparse ${OpenCV_LIBS} ${G2O_LIBS})
+
+add_executable(direct_sparse_ceres direct_sparse_ceres.cpp)
+target_link_libraries(direct_sparse ${OpenCV_LIBS})
