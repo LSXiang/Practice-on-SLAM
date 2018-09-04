@@ -254,8 +254,16 @@ void pose_estimation_3d3d(const std::vector<cv::Point3f>& pts1, const std::vecto
     Eigen::JacobiSVD<Eigen::Matrix3d> svd(W, Eigen::ComputeFullU | Eigen::ComputeFullV);
     Eigen::Matrix3d U = svd.matrixU();
     Eigen::Matrix3d V = svd.matrixV();
+
+    // 利用SVD求解3D-3D变换，需要U和V的行列式同号。换言之，旋转矩阵的行列式只能为1，不能为-1
+    if (U.determinant() * V.determinant() < 0) {
+        for (int x = 0; x < 3; ++x) {
+            U(x, 2) *= -1;
+        }
+    }
     cout << "U = " << U << endl;
     cout << "V = " << V << endl;
+    
     
     Eigen::Matrix3d R_ = U * (V.transpose());
     Eigen::Vector3d t_ = Eigen::Vector3d(p1.x, p1.y, p1.z) - R_ * Eigen::Vector3d(p2.x, p2.y, p2.z);
