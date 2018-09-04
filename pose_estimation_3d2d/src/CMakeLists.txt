@@ -11,9 +11,11 @@ find_package(OpenCV REQUIRED)
 find_package(G2O REQUIRED)
 # csparse
 find_package(CSparse REQUIRED)
+# Ceres
+find_package(Ceres REQUIRED)
 
 # include
-include_directories(${OpenCV_INCLUDE_DIRS} ${G2O_INCLUDE_DIR} ${CSPARSE_INCLUDE_DIR} "/usr/include/eigen3/")
+include_directories(${OpenCV_INCLUDE_DIRS} ${G2O_INCLUDE_DIR} ${CSPARSE_INCLUDE_DIR} "/usr/include/eigen3/" ${CERES_INCLUDE_DIRS})
 
 # set ignore "deprecated-declarations" warning
 add_compile_options("-Wno-deprecated-declarations")
@@ -26,6 +28,10 @@ target_link_libraries( pose_estimation_3d2d
     ${CSPARSE_LIBRARY}
 )
 
-
+add_executable(pose_estimation_3d2d_ceres pose_estimation_3d2d_ceres.cpp)
+target_link_libraries( pose_estimation_3d2d_ceres
+    ${OpenCV_LIBRARIES}
+    ${CERES_LIBS}
+)
 
 
