@@ -147,28 +147,39 @@ cv::Point2d pixel2cam(const cv::Point2d& p, const cv::Mat& K)
 class ReprojectionError
 {
 public:
-    ReprojectionError(cv::Point3f point_3d, cv::Point2f point2d) : p_3d_(point_3d), p_2d_(point2d) {}
+    ReprojectionError(cv::Point2f point2d) : p_2d_(point2d) {}
     
     template<typename T>
-    bool operator()(T* residual) const;
+    bool operator()(const T* const T_, const T* const point_3d_,  T* residual_) const;
     
 private:
     template<typename T>
-    inline bool camProjectionWithDistortion(const T* R, const T* t, const)
+    inline bool camProjectionWithDistortion(const T* R, const T* t, const T*);
     
-    cv::Point3f p_3d_;
     cv::Point2f p_2d_;
+    static float fx_, fy_, cx_, cy_;
 };
 
+float ReprojectionError::fx_ = 520.9; 
+float ReprojectionError::fy_ = 521.0;
+float ReprojectionError::cx_ = 325.1;
+float ReprojectionError::cy_ = 249.7;
+
 template<typename T>
-bool ReprojectionError::operator()(T* residual) const
+bool ReprojectionError::operator()(const T* const T_, const T* const point_3d_,  T* residual_) const
+{
+    
+}
+
+template<typename T>
+inline bool ReprojectionError::camProjectionWithDistortion(const T* R, const T* t, const T*)
 {
     
 }
 
 
 void bundleAdjustment(
-    const std::vector<cv::Point3f> points_3d, 
+    const std::vector<cv::Point3f> points_3d,
     const std::vector<cv::Point2f> points_2d,
     const cv::Mat& K,
     cv::Mat& R,
