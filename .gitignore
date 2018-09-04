@@ -36,6 +36,8 @@
 */.kdev4
 */*.kdev4
 
+*~
+
 *.tar
 *.tar.gz
 *.tgz
