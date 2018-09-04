@@ -35,8 +35,9 @@ int main(int argc, char **argv)
     
     std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
     for (size_t y = 0; y < image.rows; y++) {
+        unsigned char *row_ptr = image.ptr<unsigned char>(y);
+        
         for(size_t x = 0; x < image.cols; x++) {
-            unsigned char *row_ptr = image.ptr<unsigned char>(y);
             unsigned char *data_ptr = &row_ptr[x*image.channels()];
             for (int c = 0; c != image.channels(); c++) {
                 unsigned char data = data_ptr[c];
