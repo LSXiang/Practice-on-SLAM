@@ -1,5 +1,5 @@
 # set property
-set(CMAKE_CXX_FLAGS "-std=c++11")
+set(CMAKE_CXX_FLAGS "-std=c++11 -march=native -O3")
 set(CMAKE_BUILD_TYPE "Debug")
 
 # add cmake modules 
@@ -11,9 +11,11 @@ find_package(OpenCV REQUIRED)
 find_package(G2O REQUIRED)
 # csparse
 find_package(CSparse REQUIRED)
+# ceres
+find_package(Ceres REQUIRED)
 
 # include
-include_directories(${OpenCV_INCLUDE_DIRS} ${G2O_INCLUDE_DIR} ${CSPARSE_INCLUDE_DIR} "/usr/include/eigen3/")
+include_directories(${OpenCV_INCLUDE_DIRS} ${G2O_INCLUDE_DIR} ${CSPARSE_INCLUDE_DIR} "/usr/include/eigen3/" ${CERES_INCLUDE_DIRS})
 
 # set ignore "deprecated-declarations" warning
 add_compile_options("-Wno-deprecated-declarations")
@@ -24,5 +26,11 @@ target_link_libraries( pose_estimation_3d3d
     ${OpenCV_LIBRARIES} 
     ${G2O_STUFF_LIBRARY} ${G2O_CORE_LIBRARY} ${G2O_TYPES_SBA} ${G2O_SOLVER_CSPARSE_EXTENSION}
     ${CSPARSE_LIBRARY}
+)
+
+add_executable(pose_estimation_3d3d_ceres pose_estimation_3d3d_ceres.cpp)
+target_link_libraries( pose_estimation_3d3d_ceres
+    ${OpenCV_LIBRARIES} 
+    ${CERES_LIBRARIES}
 )
 
