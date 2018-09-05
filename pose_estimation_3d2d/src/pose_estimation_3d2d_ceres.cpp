@@ -30,6 +30,7 @@ void bundleAdjustment( const std::vector<cv::Point3f>, const std::vector<cv::Poi
 
 int main(int argc, char** argv)
 {
+    google::InitGoogleLogging(argv[0]);
     if (argc != 5) {
         cout << "usage: pose_estimation_3d2d img1 img2 depth1 depth2." << endl;
         return 1;
@@ -77,9 +78,9 @@ int main(int argc, char** argv)
     cout << "R = " << endl << R << endl;
     cout << "t = " << endl << t << endl;
     
-    cout << "calling bundle adjustment" << endl;
+    cout << "\r\ncalling bundle adjustment" << endl;
     
-    bundleAdjustment(pts_3d, pts_2d, K, R, t);
+    bundleAdjustment(pts_3d, pts_2d, K, r, t);
     
     return 0;
 }
@@ -147,16 +148,20 @@ cv::Point2d pixel2cam(const cv::Point2d& p, const cv::Mat& K)
 class ReprojectionError
 {
 public:
-    ReprojectionError(cv::Point2f point2d) : p_2d_(point2d) {}
+    ReprojectionError(const cv::Point2f p_2d, const cv::Point3f p_3d) : p_2d_(p_2d), p_3d_(p_3d) {}
     
     template<typename T>
     bool operator()(const T* const T_, const T* const point_3d_,  T* residual_) const;
     
+    // Factory to hide the construction of the CostFunction object from the client code.
+    static ceres::CostFunction* create(const cv::Point2f &p_2d, const cv::Point3f &p_3d);
+    
 private:
     template<typename T>
-    inline bool camProjectionWithDistortion(const T* R, const T* t, const T*);
+    static inline void camProjectionWithoutDistortion(const T* const r, const T* const t, const T* const pt_3d, T* predicted);
     
     cv::Point2f p_2d_;
+    cv::Point3f p_3d_;
     static float fx_, fy_, cx_, cy_;
 };
 
@@ -166,34 +171,95 @@ float ReprojectionError::cx_ = 325.1;
 float ReprojectionError::cy_ = 249.7;
 
 template<typename T>
-bool ReprojectionError::operator()(const T* const T_, const T* const point_3d_,  T* residual_) const
+bool ReprojectionError::operator()(const T* const r_, const T* const t_,  T* residual_) const
 {
+    T p[3] = {(T)p_3d_.x, (T)p_3d_.y, (T)p_3d_.z};
+    T predicted[2];
     
+    // T_[0, 1, 2] are the angle-axis rotation
+    // T_[3, 4, 5] are the translation
+    camProjectionWithoutDistortion(r_, t_, p, predicted);
+    
+    // The error is the difference between the predicted and observed position
+    residual_[0] = predicted[0] - T(p_2d_.x);
+    residual_[1] = predicted[1] - T(p_2d_.y);
+    
+//     cout << residual_[1] << ", " << residual_[2] << endl;
 }
 
 template<typename T>
-inline bool ReprojectionError::camProjectionWithDistortion(const T* R, const T* t, const T*)
+inline void ReprojectionError::camProjectionWithoutDistortion(const T* const r, const T* const t, const T* const pt_3d, T* predicted)
 {
+    T p[3];
+    ceres::AngleAxisRotatePoint(r, pt_3d, p);
     
+    p[0] += t[0];
+    p[1] += t[1];
+    p[2] += t[2];
+    
+    T px_normalized = p[0] / p[2];
+    T py_normalized = p[1] / p[2];
+    
+    predicted[0] = (T)fx_ * px_normalized + (T)cx_;
+    predicted[1] = (T)fy_ * py_normalized + (T)cy_;
 }
 
+ceres::CostFunction* ReprojectionError::create(const cv::Point2f &p_2d, const cv::Point3f &p_3d)
+{
+    return (new ceres::AutoDiffCostFunction<ReprojectionError, 2, 3, 3>(
+                new ReprojectionError(p_2d, p_3d)));
+}
 
 void bundleAdjustment(
     const std::vector<cv::Point3f> points_3d,
     const std::vector<cv::Point2f> points_2d,
     const cv::Mat& K,
-    cv::Mat& R,
+    cv::Mat& r,
     cv::Mat& t )
 {
+    double rotation[3];
+    double translation[3];
+    for (int i = 0; i < 3; i++) {
+        rotation[i] = r.at<double>(i, 0);
+        translation[i] = t.at<double>(i, 0);
+    }
+    
+    ceres::Problem problem;
+    for (int i = 0; i < points_2d.size(); i ++) {
+        ceres::CostFunction* cost_function = ReprojectionError::create(points_2d[i], points_3d[i]);
+        problem.AddResidualBlock(cost_function, nullptr, rotation, translation);
+    }
+    
+    ceres::Solver::Options options;
+    options.linear_solver_type = ceres::DENSE_SCHUR;
+    options.minimizer_progress_to_stdout = true;
+    
+    ceres::Solver::Summary summary;
     
     chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
     
+    ceres::Solve(options, &problem, &summary);
     
     chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
     chrono::duration<double> time_used = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
     cout << "optimization costs time: " << time_used.count() << " seconds." << endl;
     
+    cout << summary.BriefReport() << endl;
+    
     cout << endl << "after optimization: " << endl;
+    
+    cv::Mat r_vec = (cv::Mat_<double>(3, 1) << rotation[0], rotation[1], rotation[2]);
+    cv::Mat R;
+    cv::Rodrigues(r_vec, R);
+    
+    cout << "R = \r\n" << R << endl;
+    cout << "t = \r\n" << translation[0] << ", " << translation[1] << ", " << translation[2] << endl;
+    
 //     cout << "T = " << endl << Eigen::Isometry3d(pose->estimate()).matrix() << endl;
 }
+
+
+
+
+
 

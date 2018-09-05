@@ -31,7 +31,7 @@ target_link_libraries( pose_estimation_3d2d
 add_executable(pose_estimation_3d2d_ceres pose_estimation_3d2d_ceres.cpp)
 target_link_libraries( pose_estimation_3d2d_ceres
     ${OpenCV_LIBRARIES}
-    ${CERES_LIBS}
+    ${CERES_LIBRARIES}
 )
 
 
