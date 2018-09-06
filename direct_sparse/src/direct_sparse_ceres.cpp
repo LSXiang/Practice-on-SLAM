@@ -117,8 +117,17 @@ template<typename T>
 bool EdgeSE3ProjectDirect::operator() (const T* const T_, T* residuals)
 {
     Eigen::Isometry3d transformationMatrix;
+    transformationMatrix.matrix() << T_[0],  T_[1],  T_[2],  T_[3],
+                                     T_[4],  T_[5],  T_[6],  T_[7],
+                                     T_[8],  T_[9],  T_[10], T_[11],
+                                     T_[12], T_[13], T_[14], T_[15];
     
-    residuals[0];
+    Eigen::Vector3d p3d = transformationMatrix * x_world_; 
+    
+    Eigen::Vector2d p2d = project3Dto2D(p3d.x(), p3d.y(), p3d.z(), fx_, fy_, cx_, cy_);
+    
+    residuals[0] = grayscale_ - getPixelValue(p2d.x(), p2d.y());
+    
     return true;
 }
 
@@ -232,7 +241,10 @@ bool poseEstimationDirect(const vector<Measurement>& measurements, cv::Mat* gray
 {
     EdgeSE3ProjectDirect::addCameraIntrinsics(K);
     
-    double *T = (double *)Tcw.data();
+    for (auto m : measurements) {
+        ceres::CostFunction *costFunction;
+    }
     
+    double *T = Tcw.data();
     
 }
