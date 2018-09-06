@@ -94,15 +94,15 @@ int main(int argc, char** argv)
     
     bundleAdjustment(pts1, pts2, R, t);
     
-//     // verify p1 = R*p2 + t
-//     for (int i = 0; i < 5; i ++) {
-//         cout << "p1 = " << pts1[i] << endl;
-//         cout << "p2 = " << pts2[i] << endl;
-//         cout << "R*p2 + t = " << R * (Mat_<double>(3, 1) << pts2[i].x, pts2[i].y, pts2[i].z) + t << endl;
-//         cout << endl;
-//     }
-//     
-//     return 0;
+    // verify p1 = R*p2 + t
+    for (int i = 0; i < 5; i ++) {
+        cout << "p1 = " << pts1[i] << endl;
+        cout << "p2 = " << pts2[i] << endl;
+        cout << "R*p2 + t = " << R * (Mat_<double>(3, 1) << pts2[i].x, pts2[i].y, pts2[i].z) + t << endl;
+        cout << endl;
+    }
+    
+    return 0;
 }
 
 
@@ -259,7 +259,7 @@ void bundleAdjustment(const std::vector<cv::Point3f>& pts1, const std::vector<cv
     double rotation[3] = {0.f};
     double translation[3] = {0.f};
     
-#if 0
+#if 1
     for (int i = 0; i < 3; i++) {
         rotation[i] = r.at<double>(i, 0);
         translation[i] = r.at<double>(i, 0);
@@ -296,6 +296,9 @@ void bundleAdjustment(const std::vector<cv::Point3f>& pts1, const std::vector<cv
     
     cout << "R = \r\n" << Rotation << endl;
     cout << "t = \r\n" << translation[0] << ", " << translation[1] << ", " << translation[2] << endl;
+    
+    R = Rotation;
+    t = (cv::Mat_<double>(3,1) << translation[0], translation[1], translation[2]);
 }
 
 
