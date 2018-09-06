@@ -94,15 +94,15 @@ int main(int argc, char** argv)
     
     bundleAdjustment(pts1, pts2, R, t);
     
-    // verify p1 = R*p2 + t
-    for (int i = 0; i < 5; i ++) {
-        cout << "p1 = " << pts1[i] << endl;
-        cout << "p2 = " << pts2[i] << endl;
-        cout << "R*p2 + t = " << R * (Mat_<double>(3, 1) << pts2[i].x, pts2[i].y, pts2[i].z) + t << endl;
-        cout << endl;
-    }
-    
-    return 0;
+//     // verify p1 = R*p2 + t
+//     for (int i = 0; i < 5; i ++) {
+//         cout << "p1 = " << pts1[i] << endl;
+//         cout << "p2 = " << pts2[i] << endl;
+//         cout << "R*p2 + t = " << R * (Mat_<double>(3, 1) << pts2[i].x, pts2[i].y, pts2[i].z) + t << endl;
+//         cout << endl;
+//     }
+//     
+//     return 0;
 }
 
 
@@ -219,16 +219,83 @@ void pose_estimation_3d3d(const std::vector<cv::Point3f>& pts1, const std::vecto
     t = (cv::Mat_<double>(3, 1) << t_(0, 0), t_(1, 0), t_(2, 0));
 }
 
+class ReprojectionError {
+public:
+    ReprojectionError(const cv::Point3f &point1, const cv::Point3f &point2) : pt1_(point1), pt2_(point2) {}
+    
+    template<typename T>
+    bool operator() (const T* const r, const T* const t, T* residuals) const
+    {
+        T p[3];
+        T pt2[3] = {(T)pt2_.x, (T)pt2_.y, (T)pt2_.z};
+        
+        ceres::AngleAxisRotatePoint(r, pt2, p);
+                
+        p[0] += t[0];
+        p[1] += t[1];
+        p[2] += t[2];
+        
+        residuals[0] = p[0] - (T)pt1_.x;
+        residuals[1] = p[1] - (T)pt1_.y;
+        residuals[2] = p[2] - (T)pt1_.z;
+        
+        return true;
+    }
+    
+    static ceres::CostFunction* create(const cv::Point3f &point1, const cv::Point3f &point2)
+    {
+        return new ceres::AutoDiffCostFunction<ReprojectionError, 3, 3, 3>(new ReprojectionError(point1, point2));
+    }
+    
+private:
+    cv::Point3f pt1_, pt2_;
+};
+
 void bundleAdjustment(const std::vector<cv::Point3f>& pts1, const std::vector<cv::Point3f>& pts2, cv::Mat& R, cv::Mat& t)
 {
+    cv::Mat r;
+    cv::Rodrigues(R, r);
+    
+    double rotation[3] = {0.f};
+    double translation[3] = {0.f};
+    
+#if 0
+    for (int i = 0; i < 3; i++) {
+        rotation[i] = r.at<double>(i, 0);
+        translation[i] = r.at<double>(i, 0);
+    }
+#endif
+    
+    ceres::Problem problem;
+    for (int i = 0; i < pts1.size(); i ++) {
+        ceres::CostFunction *costFunction = ReprojectionError::create(pts1[i], pts2[i]);
+        problem.AddResidualBlock(costFunction, nullptr, rotation, translation);
+    }
+    
+    ceres::Solver::Options options;
+    options.linear_solver_type = ceres::DENSE_SCHUR;
+    options.minimizer_progress_to_stdout = true;
+    ceres::Solver::Summary summary;
 
     chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
+    
+    ceres::Solve(options, &problem, &summary);
 
     chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
     chrono::duration<double> time_used = chrono::duration_cast<chrono::duration<double>> (t2 - t1);
+    
+    cout << summary.BriefReport() << endl;
+    
     cout << "optimization costs time: " << time_used.count() << " seconds." << "\r\n";
     
     cout << endl << "after optimization: " << endl;
+    
+    cv::Mat R_vec = (cv::Mat_<double>(3, 1) << rotation[0], rotation[1], rotation[2]);
+    cv::Mat Rotation;
+    cv::Rodrigues(R_vec, Rotation);
+    
+    cout << "R = \r\n" << Rotation << endl;
+    cout << "t = \r\n" << translation[0] << ", " << translation[1] << ", " << translation[2] << endl;
 }
 
 
