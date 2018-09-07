@@ -15,6 +15,7 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/features2d/features2d.hpp>
+#include <opencv2/calib3d/calib3d.hpp>
 
 #include <Eigen/Core>
 
@@ -23,6 +24,15 @@
 
 using namespace std;
 using namespace cv;
+
+// TODO Warning!!!!! The result of using this method for bundle adjustment optimization is incorrect!!!!!!!
+
+/**
+ * TODO 
+ * The result of using this method for bundle adjustment optimization is incorrect, 
+ * and I don’t understand it for the time being.
+ */
+#define USED_ISOMETRY3D_IN_BA       0
 
 /**
  * 一次测量的值，包括一个世界坐标系下三维点与一个灰度值
@@ -65,11 +75,7 @@ inline Eigen::Vector2d project3Dto2D(float x, float y, float z, float fx, float 
  */
 bool poseEstimationDirect(const vector<Measurement>&, cv::Mat*, Eigen::Matrix3f&, Eigen::Isometry3d&);
 
-/**
- * TODO 
- * The result of using this method for bundle adjustment optimization is incorrect, 
- * and I don’t understand it for the time being.
- */
+#if USED_ISOMETRY3D_IN_BA
 /**
  * project a 3d point into an image plane, the error is photometric error
  */
@@ -142,6 +148,81 @@ bool EdgeSE3ProjectDirect::operator() (const T* const T_,  T* residuals) const
     
     return true;
 }
+
+#else
+
+/**
+ * project a 3d point into an image plane, the error is photometric error
+ */
+class EdgeSE3ProjectDirect
+{
+public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    
+    EdgeSE3ProjectDirect(const Eigen::Vector3d &p_world, const float &grayscale, cv::Mat* const image)
+     : x_world_(p_world), grayscale_(grayscale), image_(image) {}
+    
+    static void addCameraIntrinsics(const Eigen::Matrix3f &K)
+    {
+        fx_ = K(0, 0);
+        fy_ = K(1, 1);
+        cx_ = K(0, 2);
+        cy_ = K(1, 2);
+    }
+    
+    template<typename T>
+    bool operator() (const T* const r_vec, const T* const t, T* residuals) const;
+    
+    static ceres::CostFunction* create(const Eigen::Vector3d &p_world, const float &grayscale, cv::Mat* image)
+    {
+//         return (new ceres::AutoDiffCostFunction<EdgeSE3ProjectDirect, 1, 16>(new EdgeSE3ProjectDirect(p_world, grayscale, image)));
+        return (new ceres::NumericDiffCostFunction<EdgeSE3ProjectDirect, ceres::CENTRAL, 1, 3, 3>(new EdgeSE3ProjectDirect(p_world, grayscale, image)));
+    }
+    
+protected:
+    /* get a gray scale value from reference image (bilinear interpolated) */
+    inline float getPixelValue(float x, float y) const
+    {
+        uchar* data = &image_->data[(int)(y) * image_->step + (int)(x)];
+        float xx = x - floor(x);
+        float yy = y - floor(y);
+        
+        /* 求取分布在集中相邻４个像素点覆盖面积的像素灰度值 */
+        return float((1 - xx) * (1 - yy) * data[0] + \
+                     xx * (1 - yy) * data[1] + \
+                     (1 - xx) * yy * data[image_->step] + \
+                     xx * yy * data[image_->step + 1]);
+    }
+    
+private:
+    Eigen::Vector3d x_world_;                   // 3D point in world frame
+    float grayscale_;                           // Measurement grayscale
+    static float cx_, cy_, fx_, fy_;            // Camera intrinsics
+    cv::Mat* image_ = nullptr;                  // reference image
+};
+
+float EdgeSE3ProjectDirect::cx_ = 0.f;
+float EdgeSE3ProjectDirect::cy_ = 0.f;
+float EdgeSE3ProjectDirect::fx_ = 0.f;
+float EdgeSE3ProjectDirect::fy_ = 0.f;
+
+template<typename T>
+bool EdgeSE3ProjectDirect::operator() (const T* const r_vec, const T* const t, T* residuals) const
+{
+    T p_world[3] = {(T)x_world_.x(), (T)x_world_.y(), (T)x_world_.z()};
+    T p_cam[3];
+    ceres::AngleAxisRotatePoint(r_vec, p_world, p_cam);
+    p_cam[0] += t[0];
+    p_cam[1] += t[1];
+    p_cam[2] += t[2];
+    
+    Eigen::Vector2d p2d = project3Dto2D(p_cam[0], p_cam[1], p_cam[2], fx_, fy_, cx_, cy_);
+    
+    residuals[0] = (T)grayscale_ - (T)getPixelValue(p2d.x(), p2d.y());
+    
+    return true;
+}
+#endif
 
 int main(int argc, char** argv)
 {
@@ -253,6 +334,7 @@ bool poseEstimationDirect(const vector<Measurement>& measurements, cv::Mat* gray
 {
     EdgeSE3ProjectDirect::addCameraIntrinsics(K);
     
+#if USED_ISOMETRY3D_IN_BA
     ceres::Problem problem;
     for (auto m : measurements) {
         ceres::CostFunction *costFunction = EdgeSE3ProjectDirect::create(m.pos_world, m.grayscale, gray);
@@ -264,6 +346,32 @@ bool poseEstimationDirect(const vector<Measurement>& measurements, cv::Mat* gray
     options.minimizer_progress_to_stdout = true;
     ceres::Solver::Summary summary;
     ceres::Solve(options, &problem, &summary);
+#else
+    double r_vec[3] = {0.f}, t[3] = {0.f};
+    ceres::Problem problem;
+    for (auto m : measurements) {
+        ceres::CostFunction *costFunction = EdgeSE3ProjectDirect::create(m.pos_world, m.grayscale, gray);
+        problem.AddResidualBlock(costFunction, nullptr, r_vec, t);
+    }
+    
+    ceres::Solver::Options options;
+    options.linear_solver_type = ceres::DENSE_SCHUR;
+    options.minimizer_progress_to_stdout = true;
+    ceres::Solver::Summary summary;
+    ceres::Solve(options, &problem, &summary);
+    
+    cv::Mat R_vec = (cv::Mat_<double>(3, 1) << r_vec[0], r_vec[1], r_vec[2]);
+    cv::Mat R_matrix;
+    cv::Rodrigues(R_vec, R_matrix);
+    
+    Eigen::Matrix3d R;
+    R << R_matrix.at<double>(0, 0), R_matrix.at<double>(0, 1), R_matrix.at<double>(0, 2),
+         R_matrix.at<double>(1, 0), R_matrix.at<double>(1, 1), R_matrix.at<double>(1, 2),
+         R_matrix.at<double>(2, 0), R_matrix.at<double>(2, 1), R_matrix.at<double>(2, 2);
+    
+    Tcw.prerotate(R);
+    Tcw.pretranslate(Eigen::Vector3d(t[0], t[1], t[2]));    
+#endif
     
     return true;
 }
