@@ -19,6 +19,7 @@
 #include <Eigen/Core>
 
 #include <ceres/ceres.h>
+#include <ceres/rotation.h>
 
 using namespace std;
 using namespace cv;
@@ -65,6 +66,11 @@ inline Eigen::Vector2d project3Dto2D(float x, float y, float z, float fx, float 
 bool poseEstimationDirect(const vector<Measurement>&, cv::Mat*, Eigen::Matrix3f&, Eigen::Isometry3d&);
 
 /**
+ * TODO 
+ * The result of using this method for bundle adjustment optimization is incorrect, 
+ * and I don’t understand it for the time being.
+ */
+/**
  * project a 3d point into an image plane, the error is photometric error
  */
 class EdgeSE3ProjectDirect
@@ -84,11 +90,17 @@ public:
     }
     
     template<typename T>
-    bool operator() (const T* const T_, T* residuals);
+    bool operator() (const T* const T_, T* residuals) const;
+    
+    static ceres::CostFunction* create(const Eigen::Vector3d &p_world, const float &grayscale, cv::Mat* image)
+    {
+//         return (new ceres::AutoDiffCostFunction<EdgeSE3ProjectDirect, 1, 16>(new EdgeSE3ProjectDirect(p_world, grayscale, image)));
+        return (new ceres::NumericDiffCostFunction<EdgeSE3ProjectDirect, ceres::CENTRAL, 1, 16>(new EdgeSE3ProjectDirect(p_world, grayscale, image)));
+    }
     
 protected:
     /* get a gray scale value from reference image (bilinear interpolated) */
-    inline float getPixelValue(float x, float y)
+    inline float getPixelValue(float x, float y) const
     {
         uchar* data = &image_->data[(int)(y) * image_->step + (int)(x)];
         float xx = x - floor(x);
@@ -114,7 +126,7 @@ float EdgeSE3ProjectDirect::fx_ = 0.f;
 float EdgeSE3ProjectDirect::fy_ = 0.f;
 
 template<typename T>
-bool EdgeSE3ProjectDirect::operator() (const T* const T_, T* residuals)
+bool EdgeSE3ProjectDirect::operator() (const T* const T_,  T* residuals) const
 {
     Eigen::Isometry3d transformationMatrix;
     transformationMatrix.matrix() << T_[0],  T_[1],  T_[2],  T_[3],
@@ -123,10 +135,10 @@ bool EdgeSE3ProjectDirect::operator() (const T* const T_, T* residuals)
                                      T_[12], T_[13], T_[14], T_[15];
     
     Eigen::Vector3d p3d = transformationMatrix * x_world_; 
-    
+  
     Eigen::Vector2d p2d = project3Dto2D(p3d.x(), p3d.y(), p3d.z(), fx_, fy_, cx_, cy_);
     
-    residuals[0] = grayscale_ - getPixelValue(p2d.x(), p2d.y());
+    residuals[0] = (T)grayscale_ - (T)getPixelValue(p2d.x(), p2d.y());
     
     return true;
 }
@@ -241,10 +253,17 @@ bool poseEstimationDirect(const vector<Measurement>& measurements, cv::Mat* gray
 {
     EdgeSE3ProjectDirect::addCameraIntrinsics(K);
     
+    ceres::Problem problem;
     for (auto m : measurements) {
-        ceres::CostFunction *costFunction;
+        ceres::CostFunction *costFunction = EdgeSE3ProjectDirect::create(m.pos_world, m.grayscale, gray);
+        problem.AddResidualBlock(costFunction, nullptr, Tcw.data());
     }
     
-    double *T = Tcw.data();
+    ceres::Solver::Options options;
+    options.linear_solver_type = ceres::DENSE_SCHUR;
+    options.minimizer_progress_to_stdout = true;
+    ceres::Solver::Summary summary;
+    ceres::Solve(options, &problem, &summary);
     
+    return true;
 }
