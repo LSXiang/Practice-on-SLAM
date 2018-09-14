@@ -1,3 +1,6 @@
+#ifndef __BAL_CLASS_G2O_H__
+#define __BAL_CLASS_G2O_H__
+
 #include <Eigen/Core>
 #include <g2o/core/base_vertex.h>
 #include <g2o/core/base_binary_edge.h>
@@ -126,7 +129,7 @@ public:
     }
 };
 
-
+#endif /* __BAL_CLASS_G2O_H__ */
 
 
 
