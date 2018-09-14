@@ -106,7 +106,7 @@ void writeToBALProblem(BALProblem* bal_problem, g2o::SparseOptimizer* optimizer)
     for (int i = 0; i < num_cameras; ++i) {
         VertexCameraBAL* pCamera = dynamic_cast<VertexCameraBAL*>(optimizer->vertex(i));
         Eigen::VectorXd newCameraVec = pCamera->estimate();
-        memcpy(raw_cameras + i * point_block_size, newCameraVec.data(), sizeof(double) * camera_block_size);
+        memcpy(raw_cameras + i * camera_block_size, newCameraVec.data(), sizeof(double) * camera_block_size);
     }
     
     double* raw_points = bal_problem->mutable_points();
@@ -152,8 +152,8 @@ void solveProblem(const char* filename, const BundleParams& params)
     
     /* show some information heer */
     std::cout << "BAL problem file loaded..." << std::endl;
-    std::cout << "BAL problem have " << bal_problem.num_cameras() << "cameras and "
-              << bal_problem.num_points() << "points." << std::endl;
+    std::cout << "BAL problem have " << bal_problem.num_cameras() << " cameras and "
+              << bal_problem.num_points() << " points." << std::endl;
     std::cout << "Forming " << bal_problem.num_observations() << " observations." << std::endl;
     
     /* store the initial 3d cloud points camera pose */
@@ -180,6 +180,9 @@ void solveProblem(const char* filename, const BundleParams& params)
     optimizer.initializeOptimization();
     optimizer.setVerbose(true);
     optimizer.optimize(params.num_iterations);
+    
+    std::cout << "optimization complete." << std::endl;
+    writeToBALProblem(&bal_problem, &optimizer);
     
     if (!params.final_ply.empty())  {
         bal_problem.WriteToPLYFile(params.final_ply);

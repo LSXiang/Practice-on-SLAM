@@ -86,10 +86,10 @@ public:
     bool operator() (const T* const camera, const T* const point, T* residuals) const
     {
         T predictions[2];
-        CamProjectionWithDistortion(camera, point, predictions);
-        residuals[0] = predictions[0];
-        residuals[1] - predictions[1];
-        
+        CamProjectionWithDistortion ( camera, point, predictions );
+        residuals[0] = predictions[0] - T ( measurement() ( 0 ) );
+        residuals[1] = predictions[1] - T ( measurement() ( 1 ) );
+
         return true;
     }
     
