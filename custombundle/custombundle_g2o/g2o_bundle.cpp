@@ -117,8 +117,86 @@ void writeToBALProblem(BALProblem* bal_problem, g2o::SparseOptimizer* optimizer)
     }
 }
 
+void SetSolverOptionsFromFlags(BALProblem* bal_problem, const BundleParams& params, g2o::SparseOptimizer* optimizer)
+{
+    BalBlockSolver* solver_ptr;
+    
+    g2o::LinearSolver<BalBlockSolver::PoseMatrixType>* linearSolver = nullptr;
+    
+    if (params.linear_solver == "dense_schur") {
+        linearSolver = new g2o::LinearSolverDense<BalBlockSolver::PoseMatrixType>();
+    } else if (params.linear_solver == "sparse_schur") {
+        linearSolver = new g2o::LinearSolverCholmod<BalBlockSolver::PoseMatrixType>();
+        dynamic_cast<g2o::LinearSolverCholmod<BalBlockSolver::PoseMatrixType>*>(linearSolver)->setBlockOrdering(true);  // AMD ordering, only needed for sparse cholesky solver
+    }
+    
+    solver_ptr = new BalBlockSolver(std::unique_ptr<g2o::LinearSolver<BalBlockSolver::PoseMatrixType>>(linearSolver));
+    
+    g2o::OptimizationAlgorithmWithHessian* solver;
+    
+    if (params.trust_region_strategy == "levenberg_marquardt") {
+        solver = new g2o::OptimizationAlgorithmLevenberg(std::unique_ptr<BalBlockSolver>(solver_ptr));
+    } else if (params.trust_region_strategy == "dogleg") {
+        solver = new g2o::OptimizationAlgorithmDogleg(std::unique_ptr<BalBlockSolver>(solver_ptr));
+    } else {
+        std::cout << "Please check your trust_region_strategy parameter again." << std::endl;
+        exit(EXIT_FAILURE);
+    }
+    
+    optimizer->setAlgorithm(solver);
+}
+
+void solveProblem(const char* filename, const BundleParams& params)
+{
+    BALProblem bal_problem(filename);
+    
+    /* show some information heer */
+    std::cout << "BAL problem file loaded..." << std::endl;
+    std::cout << "BAL problem have " << bal_problem.num_cameras() << "cameras and "
+              << bal_problem.num_points() << "points." << std::endl;
+    std::cout << "Forming " << bal_problem.num_observations() << " observations." << std::endl;
+    
+    /* store the initial 3d cloud points camera pose */
+    if (!params.initial_ply.empty()) {
+        bal_problem.WriteToPLYFile(params.initial_ply);
+    }
+    
+    std::cout << "beginning problem..." << std::endl;
+    
+    /* add some noise for the initial value */
+    srand(params.random_seed);
+    bal_problem.Normalize();
+    bal_problem.Perturb(params.rotation_sigma, params.translation_sigma, params.point_sigma);
+    
+    std::cout << "Normalization complete..." << std::endl;
+    
+    g2o::SparseOptimizer optimizer;
+    SetSolverOptionsFromFlags(&bal_problem, params, &optimizer);
+    buildProblem(&bal_problem, &optimizer, params);
+    
+    std::cout << "begin optimization ..." << std::endl;
+    
+    /* preform the optimization */
+    optimizer.initializeOptimization();
+    optimizer.setVerbose(true);
+    optimizer.optimize(params.num_iterations);
+    
+    if (!params.final_ply.empty())  {
+        bal_problem.WriteToPLYFile(params.final_ply);
+    }
+}
+
 int main(int argc, char* argv[])
 {
+    BundleParams params(argc, argv);    // set the parameters here.
+    
+    if (params.input.empty()) {
+        std::cout << "Usage: bundle_adjuster - input <path for dataset>";
+        return 1;
+    }
+    
+    solveProblem(params.input.c_str(), params);
+    
     return 0;
 }
 
