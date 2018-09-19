@@ -26,9 +26,9 @@ find_package(Cholmod REQUIRED)
 include_directories(${CHOLMOD_INCLUDE_DIR})
 
 # gtsam
-# find_package(GTSAMCMakeTools)
-# find_package(GTSAM REQUIRED)
-# include_directories(${GTSAM_INCLUDE_DIR})
+find_package(GTSAMCMakeTools)
+find_package(GTSAM REQUIRED)
+include_directories(${GTSAM_INCLUDE_DIR})
 
 # Ceres
 find_package(Ceres REQUIRED)
