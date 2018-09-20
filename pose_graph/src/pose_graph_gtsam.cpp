@@ -55,7 +55,7 @@ int main (int argc, char** argv)
             fin >>  idx1 >> idx2;
             double data[7];
             for (int i = 0; i < 7; i++) 
-                fin >> data[7];
+                fin >> data[i];
             
             gtsam::Rot3 R = gtsam::Rot3::quaternion(data[6], data[3], data[4], data[5]);
             gtsam::Point3 t(data[0], data[1], data[2]);
@@ -150,9 +150,33 @@ int main (int argc, char** argv)
             gtsam::noiseModel::Gaussian::shared_ptr gaussianModel = boost::dynamic_pointer_cast<gtsam::noiseModel::Gaussian>(model);
             if (gaussianModel) {
                 gtsam::Matrix info = gaussianModel->R().transpose() * gaussianModel->R();
+                gtsam::Pose3 pose = f->measured();
+                gtsam::Point3 t = pose.translation();
+                gtsam::Quaternion q = pose.rotation().toQuaternion();
+                
+                fout << "EDGE_SE3:QUAT " << f->key1() << " " << f->key2() << " "
+                     << t.x() << " " << t.y() << " " << t.z() << " "
+                     << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << " ";
+                
+                gtsam::Matrix infoG2O = gtsam::I_6x6;
+                infoG2O.block(0, 0, 3, 3) = info.block(3, 3, 3, 3);     // cov translation
+                infoG2O.block(3, 3, 3, 3) = info.block(3, 3, 3, 3);     // cov rotation
+                infoG2O.block(0, 3, 3, 3) = info.block(0, 3, 3, 3);     // off diagonal
+                infoG2O.block(3, 0, 3, 3) = info.block(3, 0, 3, 3);     // off diagonal
+                
+                for (int i = 0; i < 6; i++) {
+                    for (int j = i; j < 6; j++) {
+                        fout << infoG2O(i, j) << " ";
+                    }
+                }
+                
+                fout << std::endl;
             }
         }
     }
+    
+    fout.close();
+    std::cout << "done." << std::endl;
     
     return 0;
 }
