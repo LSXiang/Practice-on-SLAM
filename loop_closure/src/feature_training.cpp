@@ -20,10 +20,8 @@ int main(int argc, char** argv)
     
     std::vector<cv::Mat> images;
     for (int i = 0; i < 10; i++) {
-        std::string path_name = (std::string)(argv[1]) + std::to_string(i + 1) + ".png";
+        std::string path_name = (std::string)(argv[1]) + "/" + std::to_string(i + 1) + ".png";
         images.push_back(cv::imread(path_name));
-        cv::imshow("image", cv::imread(path_name));
-        cv::waitKey(0);
     }
     
     // detect ORB features 
