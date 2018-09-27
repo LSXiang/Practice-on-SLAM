@@ -12,4 +12,6 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 find_package(DBoW3 REQUIRED)
 include_directories(${DBoW3_LIB_DIR})
 
+add_definitions(-DPROJECT_PATH="${PROJECT_SOURCE_DIR}")
+
 add_subdirectory(src)
