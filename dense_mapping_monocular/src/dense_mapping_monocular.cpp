@@ -253,6 +253,14 @@ bool epipolarSearch(const cv::Mat& ref, const cv::Mat& curr, const Sophus::SE3& 
     double half_length = 0.5 * epipolar_line.norm();                // 极线线段的半长度
     if (half_length > 100) half_length = 100;                       // 我们不希望搜索太多东西 
     
+    // if the epipolar line length <= 1.5 pixel, we regard that the mean point is the matching point
+    if (half_length <= 1.5) {
+        pt_curr = px_mean_curr;
+        if (!inside(pt_curr))
+            return false;
+        return true;
+    } 
+    
     // 取消此句注释以显示极线（线段）
 //     showEpipolarLine(ref, curr, pt_ref, px_min_curr, px_max_curr);
     
