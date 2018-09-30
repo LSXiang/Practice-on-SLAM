@@ -77,7 +77,7 @@ double computeNCC(
 
 inline double getBilinearInterpolatedValue(const cv::Mat& image, const Eigen::Vector2d& pt)
 {
-    uchar* d = & image.data[int(pt.y() * image.step + pt.x())];
+    uchar* d = & image.data[int(pt.y()) * image.step + int(pt.x())];
     
     double xx = pt.x() - floor(pt.x());
     double yy = pt.y() - floor(pt.y());
@@ -174,7 +174,7 @@ int main(int argc, char** argv)
     return 0u;
 }
 
-bool readDatasetFiles(const std::string& path, std::vector<std::string>& color_image_files, std::vector<Sophus::SE3>& pose)
+bool readDatasetFiles(const std::string& path, std::vector<std::string>& color_image_files, std::vector<Sophus::SE3>& poses)
 {
     std::ifstream fin(path + "/first_200_frames_traj_over_table_input_sequence.txt");
     if (!fin) return false;
@@ -188,7 +188,7 @@ bool readDatasetFiles(const std::string& path, std::vector<std::string>& color_i
         for (double& d : data) fin >> d;
         
         color_image_files.push_back(path + std::string("/images/") + image_name);
-        pose.push_back(
+        poses.push_back(
             Sophus::SE3(Sophus::Quaterniond(data[6], data[3], data[4], data[5]),
                         Sophus::Vector3d(data[0], data[1], data[2]))
         );
