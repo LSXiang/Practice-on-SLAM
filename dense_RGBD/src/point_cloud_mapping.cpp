@@ -21,7 +21,7 @@ int main(int argc, char** argv)
 //     vector<Eigen::Isometry3d> poses;
     std::vector<Eigen::Isometry3d, Eigen::aligned_allocator<Eigen::Isometry3d>> poses;
     
-    ifstream fin("../../pose.txt");
+    ifstream fin("../../data/pose.txt");
     if (!fin) {
         cerr << "please run the program with the directory -'../../' and file 'pose.txt'.";
         return 1;
@@ -29,8 +29,8 @@ int main(int argc, char** argv)
     
     for (int i = 0; i < 5; i ++) {
         boost::format fmt("../../%s/%d.%s");
-        colorImgs.push_back(cv::imread((fmt%"color"%(i+1)%"png").str()));
-        depthImgs.push_back(cv::imread((fmt%"depth"%(i+1)%"pgm").str(), -1));
+        colorImgs.push_back(cv::imread((fmt%"data/color"%(i+1)%"png").str()));
+        depthImgs.push_back(cv::imread((fmt%"data/depth"%(i+1)%"pgm").str(), -1));
         
         double data[7] = {0};
         for (auto & d:data) {
