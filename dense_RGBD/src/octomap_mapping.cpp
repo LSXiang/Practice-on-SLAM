@@ -68,7 +68,7 @@ int main(int argc, char** argv)
                 point[0] = (v-cy)*point[2]/fy;
                 Eigen::Vector3d point_world = T*point;
                 
-                cloud.push_back(point_world[0], point[1], point[2]);
+                cloud.push_back(point_world[0], point_world[1], point_world[2]);
             }
         }
         
