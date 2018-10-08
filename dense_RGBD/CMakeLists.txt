@@ -17,7 +17,7 @@ include_directories(${PCL_INCLUDE_DIRS})
 add_definitions(${PCL_DEFINITIONS})
 
 # octomap
-# find_package(octomap REQUIRED)
-# include_directories(${OCTOMAP_INCLUDE_DIRS})
+find_package(octomap REQUIRED)
+include_directories(${OCTOMAP_INCLUDE_DIRS})
 
 add_subdirectory(src)
