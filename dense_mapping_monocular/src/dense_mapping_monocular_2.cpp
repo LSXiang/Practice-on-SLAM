@@ -31,6 +31,7 @@ const int ncc_area = (2*ncc_window_size + 1) * (2*ncc_window_size + 1);     // N
 
 const double min_cov = 0.1f;    // convergence condition: minimum variance
 const double max_cov = 10.f;    // divergence  condition: maximum variance
+const double min_depth = 0.1;
 
 /* functions declaration */
 bool readDatasetFiles(
@@ -240,7 +241,7 @@ bool epipolarSearch(const cv::Mat& ref, const cv::Mat& curr, const Sophus::SE3& 
     
     Eigen::Vector2d px_mean_curr = cam2px(T_c_r * p_ref);           // 按深度均值投影的像素
     double d_min = depth_mu - 3*depth_cov, d_max = depth_mu + 3*depth_cov;
-    if (d_min < 0.1) d_min = 0.1;
+    if (d_min < min_depth) d_min = min_depth;
     Eigen::Vector2d px_min_curr = cam2px(T_c_r * (f_ref * d_min));  // 按最小深度投影的像素
     Eigen::Vector2d px_max_curr = cam2px(T_c_r * (f_ref * d_max));  // 按最大深度投影的像素
     
@@ -365,20 +366,19 @@ bool updateDepthFilter(const Eigen::Vector2d& pt_ref, const Eigen::Vector2d& pt_
     double p_prime = t_norm * sin(beta_prime) / sin(gamma);
     double d_cov = p_prime - depth_estimation;
     double d_cov2 = d_cov * d_cov;
-    
-    
+
 //     double tau_inverse = 0.5 * (1.0/std::max(0.0000001, depth_estimation-d_cov) - 1.0/(depth_estimation+d_cov));
 //     double d_cov2 = (tau_inverse * tau_inverse);
     
     // 高斯融合
     double mu = 1.f / depth.ptr<double>(int(pt_ref.y()))[int(pt_ref.x())];
-    double sigma2 =  depth_cov.ptr<double>(int(pt_ref.y()))[int(pt_ref.x())];
+    double sigma2 = depth_cov.ptr<double>(int(pt_ref.y()))[int(pt_ref.x())];
     
     double mu_fuse = (d_cov2*mu + sigma2*(1.f / depth_estimation)) / (d_cov2 + sigma2);
     double sigma2_fuse = (d_cov2*sigma2) / (d_cov2 + sigma2);
     
     depth.ptr<double>(int(pt_ref.y()))[int(pt_ref.x())] = 1.f / mu_fuse;
-    depth_cov.ptr<double>(int(pt_ref.y()))[int(pt_ref.x())] =  sigma2_fuse;
+    depth_cov.ptr<double>(int(pt_ref.y()))[int(pt_ref.x())] = sigma2_fuse;
     
     return true;
 }
