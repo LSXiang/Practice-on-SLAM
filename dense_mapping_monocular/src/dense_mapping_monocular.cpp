@@ -14,11 +14,6 @@
 
 #include <sophus/se3.h>
 
-using namespace std;
-using namespace cv;
-using namespace Eigen;
-using Sophus::SE3;
-
 /* parameters */
 const int boarder = 20;         // boundary
 const int width = 640;
