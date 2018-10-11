@@ -70,8 +70,15 @@ double computeNCC(
     const cv::Mat& ref,
     const cv::Mat& curr,
     const Eigen::Vector2d& pt_ref,
-    const Eigen::Vector2d& pt_curr
+    const Eigen::Vector2d& pt_curr,
+    const Eigen::Matrix2d& A_cur_ref
 );
+
+inline bool inside(const Eigen::Vector2d& pt)
+{
+    return (pt.x() >= boarder && pt.y() >= boarder
+        &&  pt.x() + boarder <= width && pt.y() + boarder <= height); 
+}
 
 inline double getBilinearInterpolatedValue(const cv::Mat& image, const Eigen::Vector2d& pt)
 {
@@ -104,12 +111,6 @@ inline Eigen::Vector2d cam2px(const Eigen::Vector3d p_cam)
         p_cam.x() * fx / p_cam.z() + cx,
         p_cam.y() * fy / p_cam.z() + cy
     );
-}
-
-inline bool inside(const Eigen::Vector2d& pt)
-{
-    return (pt.x() >= boarder && pt.y() >= boarder
-        &&  pt.x() + boarder <= width && pt.y() + boarder <= height); 
 }
 
 void showEpipolarMatch(
@@ -251,6 +252,18 @@ bool epipolarSearch(const cv::Mat& ref, const cv::Mat& curr, const Sophus::SE3& 
     double half_length = 0.5 * epipolar_line.norm();                // 极线线段的半长度
     if (half_length > 100) half_length = 100;                       // 我们不希望搜索太多东西 
     
+    // compute affine warp matrix A_cur_ref
+    Eigen::Matrix2d A_cur_ref;
+    Eigen::Vector3d xyz_du_ref(px2cam(pt_ref + Eigen::Vector2d(ncc_window_size, 0)));
+    Eigen::Vector3d xyz_dv_ref(px2cam(pt_ref + Eigen::Vector2d(0, ncc_window_size)));
+    xyz_du_ref *= p_ref[2] / xyz_du_ref[2];
+    xyz_dv_ref *= p_ref[2] / xyz_dv_ref[2];
+    Eigen::Vector2d px_du(cam2px(T_c_r * xyz_du_ref));
+    Eigen::Vector2d px_dv(cam2px(T_c_r * xyz_dv_ref));
+    A_cur_ref.col(0) = (px_du - px_mean_curr) / ncc_window_size;
+    A_cur_ref.col(1) = (px_dv - px_mean_curr) / ncc_window_size;
+    
+    
     // if the epipolar line length <= 1.5 pixel, we regard that the mean point is the matching point
     if (half_length <= 1.5) {
         pt_curr = px_mean_curr;
@@ -267,10 +280,11 @@ bool epipolarSearch(const cv::Mat& ref, const cv::Mat& curr, const Sophus::SE3& 
     Eigen::Vector2d best_px_curr;
     for (double l = -half_length; l <= half_length; l += 0.7){      // l += sqrt(2)
         Eigen::Vector2d px_curr = px_mean_curr + l * epipolar_direction;    // 待匹配点
+        
         if (!inside(px_curr))
             continue;
         // 计算待匹配点与参考帧的 NCC
-        double ncc = computeNCC(ref, curr, pt_ref, px_curr);
+        double ncc = computeNCC(ref, curr, pt_ref, px_curr, A_cur_ref);
         if (ncc > best_ncc) {
             best_ncc = ncc;
             best_px_curr = px_curr;
@@ -284,7 +298,7 @@ bool epipolarSearch(const cv::Mat& ref, const cv::Mat& curr, const Sophus::SE3& 
     return true;
 }
 
-double computeNCC(const cv::Mat& ref, const cv::Mat& curr, const Eigen::Vector2d& pt_ref, const Eigen::Vector2d& pt_curr)
+double computeNCC(const cv::Mat& ref, const cv::Mat& curr, const Eigen::Vector2d& pt_ref, const Eigen::Vector2d& pt_curr, const Eigen::Matrix2d& A_cur_ref)
 {
     // 零均值-归一化互相关
     // 先算均值
@@ -296,7 +310,7 @@ double computeNCC(const cv::Mat& ref, const cv::Mat& curr, const Eigen::Vector2d
             mean_ref += value_ref;
             
 //             double value_curr = double(curr.ptr<uchar>(int(y + pt_curr.y()))[int(x + pt_curr.x())]) / 255.0;
-            double value_curr = getBilinearInterpolatedValue(curr, pt_curr + Eigen::Vector2d(x, y));
+            double value_curr = getBilinearInterpolatedValue(curr, pt_curr + (A_cur_ref * Eigen::Vector2d(x, y)));
             mean_curr += value_curr;
             
             values_ref.push_back(value_ref);
