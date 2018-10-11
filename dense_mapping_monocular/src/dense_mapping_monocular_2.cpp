@@ -379,10 +379,10 @@ bool updateDepthFilter(const Eigen::Vector2d& pt_ref, const Eigen::Vector2d& pt_
     double gamma = M_PI - alpha - beta_prime;
     double p_prime = t_norm * sin(beta_prime) / sin(gamma);
     double d_cov = p_prime - depth_estimation;
-    double d_cov2 = d_cov * d_cov;
+//     double d_cov2 = d_cov * d_cov;
 
-//     double tau_inverse = 0.5 * (1.0/std::max(0.0000001, depth_estimation-d_cov) - 1.0/(depth_estimation+d_cov));
-//     double d_cov2 = (tau_inverse * tau_inverse);
+    double tau_inverse = 0.5 * (1.0/std::max(0.0000001, depth_estimation-d_cov) - 1.0/(std::max(0.0000001, depth_estimation+d_cov)));
+    double d_cov2 = (tau_inverse * tau_inverse);
     
     // 高斯融合
     double mu = 1.f / depth.ptr<double>(int(pt_ref.y()))[int(pt_ref.x())];
