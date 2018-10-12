@@ -24,7 +24,7 @@ Matrix6d JRInv(Sophus::SE3 error)
 {
     Matrix6d Jacobian;
     Jacobian.block(0, 0, 3, 3) = Sophus::SO3::hat(error.so3().log());
-    Jacobian.block(0, 3, 3, 3) = Sophus::SO3::hat(error.translation());
+    Jacobian.block(0, 3, 3, 3) = Sophus::SO3::hat(error.translation()); // * Sophus::SO3::hat(error.so3().log());
     Jacobian.block(3, 0, 3, 3) = Eigen::Matrix3d::Zero();
     Jacobian.block(3, 3, 3, 3) = Sophus::SO3::hat(error.so3().log());
     
