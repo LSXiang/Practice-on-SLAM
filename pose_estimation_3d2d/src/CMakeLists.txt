@@ -13,9 +13,17 @@ find_package(G2O REQUIRED)
 find_package(CSparse REQUIRED)
 # Ceres
 find_package(Ceres REQUIRED)
+# Sophus
+find_package(Sophus REQUIRED)
 
 # include
-include_directories(${OpenCV_INCLUDE_DIRS} ${G2O_INCLUDE_DIR} ${CSPARSE_INCLUDE_DIR} "/usr/include/eigen3/" ${CERES_INCLUDE_DIRS})
+include_directories(
+    ${OpenCV_INCLUDE_DIRS} 
+    ${G2O_INCLUDE_DIR} 
+    ${CSPARSE_INCLUDE_DIR} 
+    "/usr/include/eigen3/" 
+    ${CERES_INCLUDE_DIRS}
+    ${Sophus_INCLUDE_DIRS})
 
 # set ignore "deprecated-declarations" warning
 add_compile_options("-Wno-deprecated-declarations")
@@ -34,4 +42,10 @@ target_link_libraries( pose_estimation_3d2d_ceres
     ${CERES_LIBRARIES}
 )
 
-
+add_executable(pose_estimation_3d2d_lie_algebra pose_estimation_3d2d_lie_algebra.cpp)
+target_link_libraries( pose_estimation_3d2d_lie_algebra 
+    ${OpenCV_LIBRARIES} 
+    ${G2O_STUFF_LIBRARY} ${G2O_CORE_LIBRARY} ${G2O_TYPES_SBA} ${G2O_SOLVER_CSPARSE_EXTENSION}
+    ${CSPARSE_LIBRARY}
+    ${Sophus_LIBRARIES}
+)
