@@ -13,6 +13,7 @@
 #include <g2o/core/optimization_algorithm_levenberg.h>
 #include <g2o/solvers/csparse/linear_solver_csparse.h>
 #include <g2o/types/sba/types_six_dof_expmap.h>
+#include <g2o/core/base_binary_edge.h>
 
 #include <sophus/se3.h>
 #include <sophus/so3.h>
@@ -25,15 +26,16 @@ class VertexSE3LieAlgebra : public g2o::BaseVertex<6, Sophus::SE3>
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
     
-    virtual bool read(std::istream& is) {}
-    virtual bool write(std::ostream& os) const {}
+    bool read(std::istream& is) {}
+    bool write(std::ostream& os) const {}
     
-    void setToOriginImpl()
+    virtual void setToOriginImpl()
     {
         _estimate = Sophus::SE3();
     }
     
-    void oplusImpl(const double* update)
+    /* update */
+    virtual void oplusImpl(const double* update)
     {
         Sophus::SE3 up(
             Sophus::SO3(update[3], update[4], update[5]),
@@ -53,14 +55,15 @@ public:
     virtual bool read(std::istream& is) {}
     virtual bool write(std::ostream& os) const {}
     
-    virtual void setToOriginImpl() {
-      _estimate.fill(0);
+    virtual void setToOriginImpl()
+    {
+        _estimate.fill(0);
     }
 
     virtual void oplusImpl(const double* update)
     {
-      Eigen::Map<const Eigen::Vector3d> v(update);
-      _estimate += v;
+        Eigen::Map<const Eigen::Vector3d> v(update);
+        _estimate += v;
     }
 };
 
@@ -69,13 +72,21 @@ class EdgeProject3D22D : public g2o::BaseBinaryEdge<2, Eigen::Vector2d, VertexPo
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
     
+    EdgeProject3D22D()
+    {
+        _cam = nullptr;
+        resizeParameters(1);
+        installParameter(_cam, 0);
+    }
+    
     virtual bool read(std::istream& is) {}
     virtual bool write(std::ostream& os) const {}
     
     void computeError()
     {
-        Eigen::Vector3d point3d = dynamic_cast<VertexPoint3D*>(_vertices[0])->estimate();
-        Sophus::SE3 pose = dynamic_cast<VertexSE3LieAlgebra*>(_vertices[1])->estimate();
+        Eigen::Vector3d point3d = static_cast<VertexPoint3D*>(_vertices[0])->estimate();
+        Sophus::SE3 pose = static_cast<VertexSE3LieAlgebra*>(_vertices[1])->estimate();
+        
         const g2o::CameraParameters * cam = static_cast<const g2o::CameraParameters *>(parameter(0));
         
         _error = _measurement - cam->cam_map(pose * point3d);
@@ -83,8 +94,8 @@ public:
     
     void linearizeOplus()
     {
-        Eigen::Vector3d point3d = dynamic_cast<VertexPoint3D*>(_vertices[0])->estimate();
-        Sophus::SE3 pose = dynamic_cast<VertexSE3LieAlgebra*>(_vertices[1])->estimate();
+        Eigen::Vector3d point3d = static_cast<VertexPoint3D*>(_vertices[0])->estimate();
+        Sophus::SE3 pose = static_cast<VertexSE3LieAlgebra*>(_vertices[1])->estimate();
         
         Eigen::Vector3d xyz_trans(pose * point3d);
         
@@ -96,29 +107,31 @@ public:
         const g2o::CameraParameters * cam = static_cast<const g2o::CameraParameters *>(parameter(0));
         
         Eigen::Matrix<double, 2, 3, Eigen::ColMajor> tmp;
-        tmp(0, 0) = cam->focal_length / z;
+        tmp(0, 0) = -cam->focal_length / z;
         tmp(0, 1) = 0;
-        tmp(0, 2) = -cam->focal_length * x / z_2;
+        tmp(0, 2) = cam->focal_length * x / z_2;
         tmp(1, 0) = 0;
-        tmp(1, 1) = cam->focal_length / z;
-        tmp(1, 2) = -cam->focal_length * y / z_2;
+        tmp(1, 1) = -cam->focal_length / z;
+        tmp(1, 2) = cam->focal_length * y / z_2;
         
         _jacobianOplusXi = tmp * pose.rotation_matrix();
         
-        _jacobianOplusXj(0, 0) = -cam->focal_length * x * y / z_2;
-        _jacobianOplusXj(0, 1) = cam->focal_length * (1 + x*x/z_2);
-        _jacobianOplusXj(0, 2) = -cam->focal_length * y / z;
-        _jacobianOplusXj(0, 3) = cam->focal_length / z;
+        _jacobianOplusXj(0, 0) = cam->focal_length * x * y / z_2;
+        _jacobianOplusXj(0, 1) = -cam->focal_length * (1 + x*x/z_2);
+        _jacobianOplusXj(0, 2) = cam->focal_length * y / z;
+        _jacobianOplusXj(0, 3) = -cam->focal_length / z;
         _jacobianOplusXj(0, 4) = 0;
-        _jacobianOplusXj(0, 5) = -cam->focal_length * x / z_2;
+        _jacobianOplusXj(0, 5) = cam->focal_length * x / z_2;
         
-        _jacobianOplusXj(1, 0) = -cam->focal_length * (1 + y*y/z_2);
-        _jacobianOplusXj(1, 1) = cam->focal_length * x * y / z_2;
-        _jacobianOplusXj(1, 2) = cam->focal_length * x / z;
+        _jacobianOplusXj(1, 0) = cam->focal_length * (1 + y*y/z_2);
+        _jacobianOplusXj(1, 1) = -cam->focal_length * x * y / z_2;
+        _jacobianOplusXj(1, 2) = -cam->focal_length * x / z;
         _jacobianOplusXj(1, 3) = 0;
-        _jacobianOplusXj(1, 4) = cam->focal_length / z;
-        _jacobianOplusXj(1, 5) = -cam->focal_length * y / z_2;
+        _jacobianOplusXj(1, 4) = -cam->focal_length / z;
+        _jacobianOplusXj(1, 5) = cam->focal_length * y / z_2;
     }
+    
+    g2o::CameraParameters* _cam;
 };
 
 /* find the two photo feature matches points */
@@ -260,8 +273,8 @@ void bundleAdjustment(
     g2o::SparseOptimizer optimizer;
     optimizer.setAlgorithm(solver);
     
-    // vertex 
-    g2o::VertexSE3Expmap* pose = new g2o::VertexSE3Expmap();    // camera pose
+    // vertex
+    VertexSE3LieAlgebra * pose = new VertexSE3LieAlgebra();     // camera pose
     Eigen::Matrix3d R_mat;
     R_mat << \
         R.at<double>(0, 0), R.at<double>(0, 1), R.at<double>(0, 2), \
@@ -269,7 +282,7 @@ void bundleAdjustment(
         R.at<double>(2, 0), R.at<double>(2, 1), R.at<double>(2, 2);
     pose->setId(0);
     pose->setEstimate(
-        g2o::SE3Quat(
+        Sophus::SE3(
             R_mat, 
             Eigen::Vector3d(t.at<double>(0, 0), t.at<double>(1, 0), t.at<double>(2, 0))
         )
@@ -278,7 +291,7 @@ void bundleAdjustment(
     
     int index = 1;
     for (const cv::Point3f p:points_3d) {
-        g2o::VertexSBAPointXYZ* point = new g2o::VertexSBAPointXYZ();
+        VertexPoint3D* point = new VertexPoint3D();
         point->setId(index ++);
         point->setEstimate(Eigen::Vector3d(p.x, p.y, p.z));
         point->setMarginalized(true);   // g2o 中必须设置 marg 
@@ -295,9 +308,9 @@ void bundleAdjustment(
     // edges
     index = 1;
     for (const cv::Point2f p:points_2d) {
-        g2o::EdgeProjectXYZ2UV* edge = new g2o::EdgeProjectXYZ2UV();
+        EdgeProject3D22D* edge = new EdgeProject3D22D();
         edge->setId(index);
-        edge->setVertex(0, dynamic_cast<g2o::VertexSBAPointXYZ*>(optimizer.vertex(index)));
+        edge->setVertex(0, dynamic_cast<VertexPoint3D*>(optimizer.vertex(index)));
         edge->setVertex(1, pose);
         edge->setMeasurement(Eigen::Vector2d(p.x, p.y));
         edge->setParameterId(0, 0);
@@ -309,16 +322,14 @@ void bundleAdjustment(
     std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
     optimizer.setVerbose(true);
     optimizer.initializeOptimization();
-    optimizer.optimize(100);
+    optimizer.optimize(10);
     std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
     std::chrono::duration<double> time_used = std::chrono::duration_cast<std::chrono::duration<double>>(t2 - t1);
     std::cout << "optimization costs time: " << time_used.count() << " seconds." << std::endl;
     
     std::cout << std::endl << "after optimization: " << std::endl;
-    std::cout << "T = " << std::endl << Eigen::Isometry3d(pose->estimate()).matrix() << std::endl;
+    std::cout << "T = " << std::endl << pose->estimate().matrix() << std::endl;
 }
-
-
 
 
 
