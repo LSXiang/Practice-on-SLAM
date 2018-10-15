@@ -57,7 +57,7 @@ public:
       _estimate.fill(0);
     }
 
-    virtual void oplusImpl(const number_t* update)
+    virtual void oplusImpl(const double* update)
     {
       Eigen::Map<const Eigen::Vector3d> v(update);
       _estimate += v;
@@ -69,6 +69,56 @@ class EdgeProject3D22D : public g2o::BaseBinaryEdge<2, Eigen::Vector2d, VertexPo
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
     
+    virtual bool read(std::istream& is) {}
+    virtual bool write(std::ostream& os) const {}
+    
+    void computeError()
+    {
+        Eigen::Vector3d point3d = dynamic_cast<VertexPoint3D*>(_vertices[0])->estimate();
+        Sophus::SE3 pose = dynamic_cast<VertexSE3LieAlgebra*>(_vertices[1])->estimate();
+        const g2o::CameraParameters * cam = static_cast<const g2o::CameraParameters *>(parameter(0));
+        
+        _error = _measurement - cam->cam_map(pose * point3d);
+    }
+    
+    void linearizeOplus()
+    {
+        Eigen::Vector3d point3d = dynamic_cast<VertexPoint3D*>(_vertices[0])->estimate();
+        Sophus::SE3 pose = dynamic_cast<VertexSE3LieAlgebra*>(_vertices[1])->estimate();
+        
+        Eigen::Vector3d xyz_trans(pose * point3d);
+        
+        double x = xyz_trans[0];
+        double y = xyz_trans[1];
+        double z = xyz_trans[2];
+        double z_2 = z * z;
+        
+        const g2o::CameraParameters * cam = static_cast<const g2o::CameraParameters *>(parameter(0));
+        
+        Eigen::Matrix<double, 2, 3, Eigen::ColMajor> tmp;
+        tmp(0, 0) = cam->focal_length / z;
+        tmp(0, 1) = 0;
+        tmp(0, 2) = -cam->focal_length * x / z_2;
+        tmp(1, 0) = 0;
+        tmp(1, 1) = cam->focal_length / z;
+        tmp(1, 2) = -cam->focal_length * y / z_2;
+        
+        _jacobianOplusXi = tmp * pose.rotation_matrix();
+        
+        _jacobianOplusXj(0, 0) = -cam->focal_length * x * y / z_2;
+        _jacobianOplusXj(0, 1) = cam->focal_length * (1 + x*x/z_2);
+        _jacobianOplusXj(0, 2) = -cam->focal_length * y / z;
+        _jacobianOplusXj(0, 3) = cam->focal_length / z;
+        _jacobianOplusXj(0, 4) = 0;
+        _jacobianOplusXj(0, 5) = -cam->focal_length * x / z_2;
+        
+        _jacobianOplusXj(1, 0) = -cam->focal_length * (1 + y*y/z_2);
+        _jacobianOplusXj(1, 1) = cam->focal_length * x * y / z_2;
+        _jacobianOplusXj(1, 2) = cam->focal_length * x / z;
+        _jacobianOplusXj(1, 3) = 0;
+        _jacobianOplusXj(1, 4) = cam->focal_length / z;
+        _jacobianOplusXj(1, 5) = -cam->focal_length * y / z_2;
+    }
 };
 
 /* find the two photo feature matches points */
